@@ -2,7 +2,9 @@
 ---@field mode string
 ---@field typed string
 ---@field edit boolean
+---@field undo integer
 ---@field changedtick integer
+---@field changenr integer
 
 ---Check if the event sequence should be treated as "dot-repeatable".
 ---@param events automa.Event[]
@@ -28,9 +30,17 @@ local function check_sequence(events, idx, modes)
     if events[idx].mode ~= mode or (edit and not events[idx].edit) then
       return false, base_idx
     end
+
+    if events[idx].undo then
+      return false, base_idx
+    end
     idx = idx - 1
+
     if many then
       while events[idx].mode == mode and (not edit or events[idx].edit) do
+        if events[idx].undo then
+          return false, base_idx
+        end
         idx = idx - 1
       end
     end
@@ -60,10 +70,11 @@ function automa.setup()
 
   -- Initialize the events.
   automa.events = { {
-    mode = vim.api.nvim_get_mode().mode,
-    typed = "",
+    mode = '',
+    typed = '',
     edit = false,
     changedtick = vim.api.nvim_buf_get_changedtick(0),
+    changenr = vim.fn.changenr(),
   } }
 
   -- Listen vim.on_key
@@ -72,12 +83,27 @@ function automa.setup()
       local mode = vim.api.nvim_get_mode().mode
       vim.schedule(function()
         local changedtick = vim.api.nvim_buf_get_changedtick(0)
-        table.insert(automa.events, {
+        local changenr = vim.fn.changenr()
+        local edit = automa.events[#automa.events].changedtick ~= changedtick
+        local undo = changenr < automa.events[#automa.events].changenr
+        local event = {
           mode = mode,
           typed = typed,
-          edit = automa.events[#automa.events].changedtick ~= changedtick,
+          edit = typed ~= '.' and edit and not undo,
+          undo = typed ~= '.' and undo,
           changedtick = changedtick,
-        })
+          changenr = changenr,
+        }
+        -- -- debug log
+        -- if #automa.events > 1 then
+        --   if event.mode ~= 'c' then
+        --     if event.edit or automa.events[#automa.events - 1].mode ~= event.mode then
+        --       vim.print(event)
+        --     end
+        --   end
+        -- end
+        table.insert(automa.events, event)
+
         if #automa.events > automa.MaxEventCount then
           table.remove(automa.events, 1)
         end
@@ -104,7 +130,7 @@ function automa.execute()
     end
 
     -- `Di*****<Esc>`
-    found, idx = check_sequence(automa.events, e_idx, { 'n!', 'n', 'i*'  })
+    found, idx = check_sequence(automa.events, e_idx, { 'n!', 'n', 'i*' })
     if found then
       table.insert(candidates, { s = idx, e = e_idx })
     end
@@ -117,6 +143,12 @@ function automa.execute()
 
     -- `dd`
     found, idx = check_sequence(automa.events, e_idx, { 'n', 'no*' })
+    if found then
+      table.insert(candidates, { s = idx, e = e_idx })
+    end
+
+    -- `D`
+    found, idx = check_sequence(automa.events, e_idx, { 'n!' })
     if found then
       table.insert(candidates, { s = idx, e = e_idx })
     end
