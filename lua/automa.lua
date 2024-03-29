@@ -1,6 +1,7 @@
 ---@class automa.Event
 ---@field mode string
 ---@field typed string
+---@field edit boolean
 ---@field changedtick integer
 
 ---Check if the event sequence should be treated as "dot-repeatable".
@@ -13,21 +14,23 @@ local function check_sequence(events, idx, modes)
 
   local mode_idx = #modes
   while mode_idx > 0 and idx > 0 do
+    local edit = false
     local many = false
     local mode = modes[mode_idx]
     if mode:sub(-1, -1) == '*' then
       many = true
       mode = mode:sub(1, -2)
     elseif mode:sub(-1, -1) == '!' then
+      edit = true
       mode = mode:sub(1, -2)
     end
 
-    if events[idx].mode ~= mode then
+    if events[idx].mode ~= mode or (edit and not events[idx].edit) then
       return false, base_idx
     end
     idx = idx - 1
     if many then
-      while events[idx].mode == mode do
+      while events[idx].mode == mode and (not edit or events[idx].edit) do
         idx = idx - 1
       end
     end
@@ -45,7 +48,7 @@ automa.MaxEventCount = 200
 ---The namespace for the automa.
 automa.ns = vim.api.nvim_create_namespace("automa")
 
----@type { mode: string, typed: string, changedtick: integer }[]
+---@type automa.Event[]
 automa.events = {}
 
 ---The automa setup function.
@@ -59,20 +62,26 @@ function automa.setup()
   automa.events = { {
     mode = vim.api.nvim_get_mode().mode,
     typed = "",
+    edit = false,
     changedtick = vim.api.nvim_buf_get_changedtick(0),
   } }
 
   -- Listen vim.on_key
   vim.on_key(function(_, typed)
     if typed ~= '' then
-      table.insert(automa.events, {
-        mode = vim.api.nvim_get_mode().mode,
-        typed = typed,
-        changedtick = vim.api.nvim_buf_get_changedtick(0),
-      })
-      if #automa.events > automa.MaxEventCount then
-        table.remove(automa.events, 1)
-      end
+      local mode = vim.api.nvim_get_mode().mode
+      vim.schedule(function()
+        local changedtick = vim.api.nvim_buf_get_changedtick(0)
+        table.insert(automa.events, {
+          mode = mode,
+          typed = typed,
+          edit = automa.events[#automa.events].changedtick ~= changedtick,
+          changedtick = changedtick,
+        })
+        if #automa.events > automa.MaxEventCount then
+          table.remove(automa.events, 1)
+        end
+      end)
     end
   end, automa.ns)
 end
@@ -88,19 +97,25 @@ function automa.execute()
   while e_idx > 1 do
     local candidates, found, idx = {}, nil, nil
 
-    -- `diwiINSERT<Esc>` should be treated as dot-repeatable.
+    -- `diwi*****<Esc>`
     found, idx = check_sequence(automa.events, e_idx, { 'n', 'no*', 'n', 'i*' })
     if found then
       table.insert(candidates, { s = idx, e = e_idx })
     end
 
-    -- `iINSERT<Esc>` should be treated as dot-repeatable.
+    -- `Di*****<Esc>`
+    found, idx = check_sequence(automa.events, e_idx, { 'n!', 'n', 'i*'  })
+    if found then
+      table.insert(candidates, { s = idx, e = e_idx })
+    end
+
+    -- `i*****<Esc>`
     found, idx = check_sequence(automa.events, e_idx, { 'n', 'i*' })
     if found then
       table.insert(candidates, { s = idx, e = e_idx })
     end
 
-    -- `dd` should be treated as dot-repeatable.
+    -- `dd`
     found, idx = check_sequence(automa.events, e_idx, { 'n', 'no*' })
     if found then
       table.insert(candidates, { s = idx, e = e_idx })
