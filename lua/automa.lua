@@ -46,6 +46,11 @@ local function check_sequence(events, idx, modes)
     end
     mode_idx = mode_idx - 1
   end
+
+  if events[base_idx].changedtick == events[idx].changedtick then
+    return false, base_idx
+  end
+
   return true, idx + 1
 end
 
