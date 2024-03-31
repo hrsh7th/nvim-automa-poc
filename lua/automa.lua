@@ -191,7 +191,7 @@ function automa.execute()
   local lazyredraw = vim.o.lazyredraw
   vim.api.nvim_feedkeys(
     vim.keycode('<Cmd>set lazyredraw<CR>') .. typed .. vim.keycode(('<Cmd>set %slazyredraw<CR>'):format(lazyredraw and '' or 'no')),
-    '',
+    'i',
     true
   )
 end
