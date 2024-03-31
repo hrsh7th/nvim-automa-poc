@@ -134,6 +134,12 @@ function automa.execute()
       table.insert(candidates, { s = idx, e = e_idx })
     end
 
+    -- `ciw*****<Esc>`
+    found, idx = check_sequence(automa.events, e_idx, { 'n', 'no*', 'i*' })
+    if found then
+      table.insert(candidates, { s = idx, e = e_idx })
+    end
+
     -- `Di*****<Esc>`
     found, idx = check_sequence(automa.events, e_idx, { 'n!', 'n', 'i*' })
     if found then
