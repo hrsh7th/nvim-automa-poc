@@ -67,9 +67,13 @@ automa.ns = vim.api.nvim_create_namespace("automa")
 automa.events = {}
 
 ---The automa setup function.
-function automa.setup()
+---@param config? { key?: string }
+function automa.setup(config)
+  config = config or {}
+  config.key = config.key or '.'
+
   -- Hijack dot-repeat.
-  vim.keymap.set('n', '.', function()
+  vim.keymap.set('n', config.key, function()
     automa.execute()
   end, { noremap = true, silent = true })
 
@@ -94,8 +98,8 @@ function automa.setup()
         local event = {
           mode = mode,
           typed = typed,
-          edit = typed ~= '.' and edit and not undo,
-          undo = typed ~= '.' and undo,
+          edit = typed ~= config.key and edit and not undo,
+          undo = typed ~= config.key and undo,
           changedtick = changedtick,
           changenr = changenr,
         }
