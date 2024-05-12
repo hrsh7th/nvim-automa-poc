@@ -1,3 +1,5 @@
+use [nvim-automa](https://github.com/hrsh7th/nvim-automa) instead.
+
 # nvim-automa-poc
 
 This repository is a POC that provides macro-like functionality using the new `vim.on_key`.
